@@ -1,7 +1,7 @@
 # Compose Android Color Picker
 ## A Color picker module written in Kotlin using Compose UI Framework
 
-[![Watch](https://raw.githubusercontent.com/g3th/Compose-Android-Color-Picker/tree/main/assets/thumb.png)](https://raw.githubusercontent.com/g3th/Compose-Android-Color-Picker/tree/main/assets/colour_picker.mp4)
+[![Watch](https://raw.githubusercontent.com/g3th/Compose-Android-Color-Picker/main/assets/thumb.png)](https://raw.githubusercontent.com/g3th/Compose-Android-Color-Picker/main/assets/colour_picker.mp4)
 
 Although plenty of colour picker projects exist on the web, easily found by searching sites like 'Medium',  'StackOverfow' or similar pulp-level publications, it is difficult to find a module written in 'pure' Compose, without importing things like 'android.graphics.Canvas' or 'android.graphics.Paint'.
 
