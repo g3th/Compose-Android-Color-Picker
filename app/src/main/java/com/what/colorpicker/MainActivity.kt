@@ -2,7 +2,6 @@ package com.what.colorpicker
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Color.RGBToHSV
 import android.graphics.Color.parseColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,7 +9,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -45,16 +48,15 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.alpha
 import androidx.core.graphics.blue
 import androidx.core.graphics.green
 import androidx.core.graphics.red
@@ -94,8 +96,14 @@ fun DragEvents(){
     var boxSizeH by remember { mutableStateOf(150.dp)}
     var boxSizeW by remember { mutableStateOf(150.dp)}
     val color = resizedBitmap.getPixel(offsetX.roundToInt(), offsetY.roundToInt())
-    val hsv = FloatArray(3)
-    RGBToHSV(color.red,color.green,color.blue, hsv)
+    var zoom by remember{ mutableFloatStateOf(1f)}
+    var pan by remember{ mutableStateOf(Offset.Zero) }
+    var viewRotation by remember{ mutableFloatStateOf(0f)}
+    val transformableState = rememberTransformableState {zoomChange, panChange, rotationChange ->
+        zoom *= zoomChange
+        pan += panChange
+        viewRotation += rotationChange
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -107,7 +115,12 @@ fun DragEvents(){
                         Color(parseColor("#26bf5c"))
                     )
                 )
-            ), verticalArrangement = Arrangement.Center,
+            )
+            .transformable(transformableState)
+            .graphicsLayer {
+                scaleX = zoom
+                scaleY = zoom
+            }, verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally) {
         Row{
             Text("Color Picker Module", fontSize = 25.sp)
@@ -117,6 +130,12 @@ fun DragEvents(){
         BoxWithConstraints(
             Modifier
                 .size(boxSizeH, boxSizeW)
+                .pointerInput(Unit){
+                    detectTapGestures(onTap = { offset ->
+                        offsetX = offset.x
+                        offsetY = offset.y
+                    })
+                }
                 .drawBehind {
                     drawImage(image = resizedBitmap.asImageBitmap())
                 }){
@@ -126,10 +145,11 @@ fun DragEvents(){
                 .size(5.dp, 15.dp)
                 .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
                 .pointerInput(Unit) {
-                    detectDragGestures { _, dragAmount ->
+                    detectDragGestures { change, dragAmount ->
                         val canvasSize = this.size
                         val summedX = offsetX + dragAmount.x
                         val summedY = offsetY + dragAmount.y
+                        change.consume()
                         offsetX = summedX.coerceIn(
                             Offset.Zero.x,
                             boxDimensions.first.toFloat() - canvasSize.width
@@ -145,41 +165,6 @@ fun DragEvents(){
         }
         state.currentColor = Color(color)
         HueBar(Color(color))
-        HorizontalDivider(thickness = 15.dp, color=Color.Transparent,
-            modifier = Modifier.width(width = 5.dp))
-        Text("Increase/Decrease Bitmap Size")
-        Row{
-            TextButton(onClick = {
-                if (boxSizeW <= 300.dp || boxSizeH <= 300.dp) {
-                    boxSizeW += 5.dp
-                    boxSizeH += 5.dp
-                }
-            }, modifier = Modifier.size(50.dp), shape = RoundedCornerShape(10),
-                colors = ButtonColors(contentColor = Color.Black,
-                    containerColor = Color(parseColor("#26bcbf")),
-                    disabledContentColor = Color.White,
-                    disabledContainerColor = Color.White
-                )){
-                Text("+", fontSize = 30.sp)
-            }
-            VerticalDivider(thickness = 5.dp, color = Color.Transparent,
-                modifier = Modifier
-                    .width(5.dp)
-                    .height(1.dp))
-            TextButton(onClick = {
-                if (boxSizeW >= 150.dp || boxSizeH >= 150.dp) {
-                    boxSizeW -= 5.dp
-                    boxSizeH -= 5.dp
-                }
-            }, modifier = Modifier.size(50.dp), shape = RoundedCornerShape(10),
-                colors = ButtonColors(contentColor = Color.Black,
-                    containerColor = Color(parseColor("#26bcbf")),
-                    disabledContentColor = Color.White,
-                    disabledContainerColor = Color.White
-                )){
-                Text("-", fontSize = 25.sp)
-            }
-        }
         HorizontalDivider(thickness = 15.dp, color=Color.Transparent,
             modifier = Modifier.width(width = 5.dp))
         Box(
@@ -218,21 +203,25 @@ fun HueBar(endGradient: Color) {
     var bitmap:ImageBitmap? by remember { mutableStateOf(null) }
     BoxWithConstraints(modifier = Modifier
         .size(150.dp, 20.dp)
+        .pointerInput(Unit){
+            detectTapGestures(onTap = { offset ->
+                offsetX = offset.x
+            })
+        }
         .drawBehind {
             val size = this.size
             boxSizeW = size.width
             boxSizeH = size.height
-                bitmap = createBitmap(
-                    size.width, size.height,
-                    currentBarColour, endGradient
-                )
-                drawImage(
-                    image = bitmap!!
-                )
+            bitmap = createBitmap(
+                size.width, size.height,
+                currentBarColour, endGradient
+            )
+            drawImage(
+                image = bitmap!!
+            )
         }, content = {
         val boxW = constraints.maxWidth
         val boxH = constraints.maxHeight
-
         Canvas(Modifier
             .size(10.dp, 10.dp)
             .offset { IntOffset(offsetX.roundToInt(), 0) }
