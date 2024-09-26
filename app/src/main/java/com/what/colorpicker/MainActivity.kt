@@ -2,6 +2,7 @@ package com.what.colorpicker
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color.RGBToHSV
 import android.graphics.Color.parseColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -40,15 +41,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,6 +83,7 @@ fun DrawScope.colourPickerPointer(width: Float, height: Float){
 @Composable
 fun DragEvents(){
     val context = LocalContext.current
+    val state = uiState.current
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.c)
@@ -90,6 +93,9 @@ fun DragEvents(){
     var boxDimensions by remember { mutableStateOf(Pair(0, 0))}
     var boxSizeH by remember { mutableStateOf(150.dp)}
     var boxSizeW by remember { mutableStateOf(150.dp)}
+    val color = resizedBitmap.getPixel(offsetX.roundToInt(), offsetY.roundToInt())
+    val hsv = FloatArray(3)
+    RGBToHSV(color.red,color.green,color.blue, hsv)
     Column(
         Modifier
             .fillMaxSize()
@@ -137,22 +143,19 @@ fun DragEvents(){
                     colourPickerPointer(size.width, size.height)
             })
         }
-        val color = resizedBitmap.getPixel(offsetX.roundToInt(), offsetY.roundToInt())
+        state.currentColor = Color(color)
+        HueBar(Color(color))
         HorizontalDivider(thickness = 15.dp, color=Color.Transparent,
             modifier = Modifier.width(width = 5.dp))
         Text("Increase/Decrease Bitmap Size")
         Row{
-            val config = LocalConfiguration.current
-            val density = LocalDensity.current
-            val w = config.screenWidthDp
-            val h = config.screenHeightDp
             TextButton(onClick = {
                 if (boxSizeW <= 300.dp || boxSizeH <= 300.dp) {
                     boxSizeW += 5.dp
                     boxSizeH += 5.dp
                 }
             }, modifier = Modifier.size(50.dp), shape = RoundedCornerShape(10),
-                colors = ButtonColors(contentColor = Color.White,
+                colors = ButtonColors(contentColor = Color.Black,
                     containerColor = Color(parseColor("#26bcbf")),
                     disabledContentColor = Color.White,
                     disabledContainerColor = Color.White
@@ -169,7 +172,7 @@ fun DragEvents(){
                     boxSizeH -= 5.dp
                 }
             }, modifier = Modifier.size(50.dp), shape = RoundedCornerShape(10),
-                colors = ButtonColors(contentColor = Color.White,
+                colors = ButtonColors(contentColor = Color.Black,
                     containerColor = Color(parseColor("#26bcbf")),
                     disabledContentColor = Color.White,
                     disabledContainerColor = Color.White
@@ -181,7 +184,7 @@ fun DragEvents(){
             modifier = Modifier.width(width = 5.dp))
         Box(
             Modifier
-                .background(Color(color.red, color.green, color.blue, color.alpha))
+                .background(state.currentColor)
                 .size(50.dp, 50.dp)){
 
         }
@@ -202,5 +205,86 @@ fun DragEvents(){
         Text("Resized Bitmap Size: ")
         Text("${resizedBitmap.width.dp} -- ${resizedBitmap.height.dp}")
     }
+}
 
+
+@Composable
+fun HueBar(endGradient: Color) {
+    val state = uiState.current
+    var currentBarColour by remember { mutableStateOf(Color.Black)}
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var boxSizeW by remember { mutableFloatStateOf(0f) }
+    var boxSizeH by remember { mutableFloatStateOf(0f) }
+    var bitmap:ImageBitmap? by remember { mutableStateOf(null) }
+    BoxWithConstraints(modifier = Modifier
+        .size(150.dp, 20.dp)
+        .drawBehind {
+            val size = this.size
+            boxSizeW = size.width
+            boxSizeH = size.height
+                bitmap = createBitmap(
+                    size.width, size.height,
+                    currentBarColour, endGradient
+                )
+                drawImage(
+                    image = bitmap!!
+                )
+        }, content = {
+        val boxW = constraints.maxWidth
+        val boxH = constraints.maxHeight
+
+        Canvas(Modifier
+            .size(10.dp, 10.dp)
+            .offset { IntOffset(offsetX.roundToInt(), 0) }
+            .pointerInput(Unit) {
+                detectDragGestures { _, dragAmount ->
+                    val canvasSize = this.size
+                    val summedX = offsetX + dragAmount.x
+                    offsetX = summedX.coerceIn(
+                        Offset.Zero.x,
+                        boxW.toFloat() - canvasSize.width
+                    )
+                }
+            }, onDraw = {
+            saturationCursor(boxH.toFloat())
+        })
+    })
+    val array = IntArray(1)
+    if (bitmap != null){
+        bitmap!!.readPixels(
+            buffer = array,
+            startX = offsetX.roundToInt(),
+            startY= boxSizeH.roundToInt() - 1,
+            width = 1,
+            height= 1,)
+    }
+    state.currentColor = Color(array[0])
+    HorizontalDivider(thickness = 15.dp, color=Color.Transparent,
+        modifier = Modifier.width(width = 5.dp))
+    TextButton(onClick = {
+        if (currentBarColour == Color.Black){
+            currentBarColour = Color.White
+        } else {
+            currentBarColour = Color.Black
+        }
+
+    }, modifier = Modifier.size(width = 100.dp, height = 40.dp), shape = RoundedCornerShape(10),
+        colors = ButtonColors(contentColor = Color.Black,
+            containerColor = Color(parseColor("#26bcbf")),
+            disabledContentColor = Color.White,
+            disabledContainerColor = Color.White
+        )){
+        Text("Invert", fontSize = 15.sp)
+    }
+}
+
+fun DrawScope.saturationCursor(h: Float){
+    drawRect(Color.White,
+        topLeft = Offset.Zero,
+        size = Size(width = 5f, height = h),
+        style = Stroke(width = 5f))
+    drawRect(Color.White,
+        topLeft = Offset.Zero,
+        size = Size(width = 20f, height = h),
+        style = Stroke(width = 5f))
 }
